@@ -1,0 +1,11 @@
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tl55-clean-python"
+version = "0.1.0"
+description = "Clean Python reimplementation of a 55-artery transmission-line waveform generator"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10", "pandas>=1.5"]
