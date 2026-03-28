@@ -8,7 +8,7 @@ The package solves the arterial tree in the frequency domain, reconstructs time-
 
 If you use this code, please cite the following references:
 
-- S. M. Shahrbabak, A. Mousavi, R. Mukkamala, and J.-O. Hahn, "In Silico Investigation of a Mathematical Model Relating the Ballistocardiogram to Aortic Blood Pressure," *IEEE Transactions on Biomedical Engineering*, vol. 73, no. 1, pp. 462-471, Jan. 2026, doi: 10.1109/TBME.2025.3584979.
+- Sina Masoumi Shahrbabak, A. Mousavi, R. Mukkamala, and J.-O. Hahn, "In Silico Investigation of a Mathematical Model Relating the Ballistocardiogram to Aortic Blood Pressure," *IEEE Transactions on Biomedical Engineering*, vol. 73, no. 1, pp. 462-471, Jan. 2026, doi: 10.1109/TBME.2025.3584979.
 
 - W. He, H. Xiao, and X. Liu, "Numerical Simulation of Human Systemic Arterial Hemodynamics Based on a Transmission Line Model and Recursive Algorithm," *Journal of Mechanics in Medicine and Biology*, vol. 12, no. 1, 2012.
 
