@@ -201,6 +201,7 @@ def prepare_flow(
     samples_per_second: int,
     repeat: int,
     n_fft: int,
+    n_positive_frequency_bins: int,
     lvet_s: float | None = None,
 ) -> PreparedFlow:
     """
@@ -254,7 +255,7 @@ def prepare_flow(
 
     # Keep only the positive-frequency terms because the solver constructs the
     # full real-valued time-domain waveform by Hermitian symmetry later.
-    q_fft_pos = q_fft[:samples_per_second]
+    q_fft_pos = q_fft[:n_positive_frequency_bins]
 
     return PreparedFlow(
         raw_time_s=raw_t,

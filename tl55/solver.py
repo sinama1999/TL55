@@ -7,6 +7,7 @@ from typing import Dict
 
 import numpy as np
 import pandas as pd
+import warnings
 
 from .constants import (
     DD,
@@ -100,26 +101,94 @@ def _trim_to_one_cycle(
     root_flow_mL_s_all: np.ndarray,
     hr_bpm: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Extract one representative beat from the reconstructed periodic waveform.
+    """Extract the first converged aortic-opening-to-aortic-opening beat."""
+    samples_per_beat = int(math.floor((60.0 / hr_bpm) * FS + 0.5))
 
-    The trimming point is chosen near a local minimum in the root-to-distal
-    pressure waveform so that the returned beat starts near end diastole.
-    """
-    samples_per_beat = int(round((60.0 / hr_bpm) / (1.0 / FS)))
+    first_beat = 3
+    last_beat = pressure_outlet_mmHg.shape[1] // samples_per_beat - 2
+    stable_beat = None
 
-    # Search in a later beat so low-HR cases still have enough signal length.
-    startpoint_mat = 20 * samples_per_beat - 10
-    start_idx = startpoint_mat - 1
+    for beat in range(first_beat, last_beat + 1):
+        idx1_start = (beat - 1) * samples_per_beat
+        idx2_start = beat * samples_per_beat
 
-    search_window = pressure_outlet_mmHg[0, start_idx : start_idx + samples_per_beat + 1]
-    idx_min_mat = int(np.argmin(search_window)) + 1
-    low1_mat = idx_min_mat + startpoint_mat
+        p1 = pressure_outlet_mmHg[
+            0,
+            idx1_start : idx1_start + samples_per_beat,
+        ]
+        p2 = pressure_outlet_mmHg[
+            0,
+            idx2_start : idx2_start + samples_per_beat,
+        ]
 
-    shift = int(round(samples_per_beat / 10.0))
-    trim_start_mat = low1_mat - shift
-    trim_end_mat = low1_mat + samples_per_beat - shift
-    trim_idx = np.arange(trim_start_mat - 1, trim_end_mat)
+        err = np.linalg.norm(p2 - p1) / np.linalg.norm(p2)
+
+        if err < 0.01:
+            stable_beat = beat
+            break
+
+    if stable_beat is None:
+        warnings.warn(
+            "Pressure waveform never reached steady state (<1% relative L2 difference). "
+            "Using the beat before the final safety-margin beat.",
+            RuntimeWarning,
+        )
+        stable_beat = last_beat - 1
+
+    search_pad_before = int(math.floor(0.05 * FS + 0.5))
+    search_pad_after = samples_per_beat
+
+    search_start = max(
+        0,
+        (stable_beat - 1) * samples_per_beat - search_pad_before,
+    )
+    search_stop = min(
+        root_flow_mL_s_all.size,
+        stable_beat * samples_per_beat + search_pad_after,
+    )
+
+    q_segment = root_flow_mL_s_all[search_start:search_stop]
+
+    # First systolic peak
+    first_beat_end = min(q_segment.size, samples_per_beat)
+    first_peak_idx = int(np.argmax(q_segment[:first_beat_end]))
+
+    # Aortic opening preceding first peak
+    first_ao_idx = None
+
+    for k in range(first_peak_idx, 0, -1):
+        if q_segment[k] >= 0.0 and q_segment[k - 1] < 0.0:
+            first_ao_idx = k
+            break
+
+    if first_ao_idx is None:
+        raise RuntimeError("Could not locate first aortic opening.")
+
+    # Second systolic peak
+    second_beat_start = samples_per_beat
+
+    if second_beat_start >= q_segment.size - 1:
+        raise RuntimeError("Search window too short to locate second beat.")
+
+    second_peak_idx = second_beat_start + int(
+        np.argmax(q_segment[second_beat_start:])
+    )
+
+    # Aortic opening preceding second peak
+    second_ao_idx = None
+
+    for k in range(second_peak_idx, 0, -1):
+        if q_segment[k] >= 0.0 and q_segment[k - 1] < 0.0:
+            second_ao_idx = k
+            break
+
+    if second_ao_idx is None:
+        raise RuntimeError("Could not locate second aortic opening.")
+
+    # Extract AO1 through the sample immediately before AO2
+    trim_start = search_start + first_ao_idx
+    trim_stop = search_start + second_ao_idx
+    trim_idx = np.arange(trim_start, trim_stop)
 
     time_s = trim_idx / FS
     return (
@@ -130,7 +199,6 @@ def _trim_to_one_cycle(
         root_flow_mL_s_all[trim_idx],
         time_s,
     )
-
 
 def _effective_segments_dataframe(effective_segments: Dict[int, ResolvedSegment]) -> pd.DataFrame:
     """
@@ -183,20 +251,20 @@ def solve_model(
         hr_rel=hr_rel,
     )
 
-    # Set the frequency resolution. The signal length is increased at lower HR
-    # so enough repeated beats are available before trimming.
+    # Maximum modeled frequency and fixed high-resolution input sampling rate.
     f0 = 32 * DD
-    d_f0_base = 512 * DD
-    base_signal_duration_s = d_f0_base / f0
+    fs_input = 512 * DD
 
+    # Make the reconstructed signal long enough to contain at least 10 beats.
     heart_period_s = 60.0 / heart_rate_bpm
-    beats_in_base_signal = base_signal_duration_s / heart_period_s
-    target_beats = 40
-    scale_k = math.ceil(target_beats / beats_in_base_signal)
+    min_beats = 10
+    target_duration_s = min_beats * heart_period_s
 
-    d_f0 = int(d_f0_base * scale_k)
-    signal_duration_factor = base_signal_duration_s * scale_k
-    n_fft = int(signal_duration_factor * d_f0)
+    d_f0 = int(math.floor(f0 * target_duration_s + 0.5))
+    signal_duration_s = d_f0 / f0
+
+    repeat = math.ceil(signal_duration_s / heart_period_s) + 2
+    n_fft = int(math.floor(fs_input * signal_duration_s + 0.5))
 
     freq_hz = np.arange(d_f0, dtype=float) * (f0 / d_f0)
     freq_hz[0] = np.finfo(float).eps * f0
@@ -216,9 +284,10 @@ def solve_model(
         q_input_path,
         hr_bpm=heart_rate_bpm,
         sv_mL=stroke_volume_mL,
-        samples_per_second=d_f0,
-        repeat=40,
+        samples_per_second=fs_input,
+        repeat=repeat,
         n_fft=n_fft,
+        n_positive_frequency_bins=d_f0,
     )
 
     # Root pressure is obtained from root flow times root input impedance.
