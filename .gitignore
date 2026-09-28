@@ -1,0 +1,60 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+/.pytest_cache/
+/.mypy_cache/
+/.ruff_cache/
+/.hypothesis/
+
+# Virtual environments
+/.venv/
+/venv/
+/env/
+
+# Packaging and build output
+/build/
+/dist/
+/.eggs/
+*.egg-info/
+*.egg
+
+# Test and coverage output
+.coverage
+.coverage.*
+/htmlcov/
+/coverage.xml
+/.tox/
+/.nox/
+
+# Jupyter temporary files
+**/.ipynb_checkpoints/
+
+# Local environment and secrets
+.env*
+!.env.example
+!.env.sample
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*~
+
+# Editors and operating-system files
+/.vscode/
+/.idea/
+/.history/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Checkout-local agent and generated-work state
+/.sites-runtime/
+/.openai/
+/.agents/
+/.codex/
+/outputs/
+/work/
